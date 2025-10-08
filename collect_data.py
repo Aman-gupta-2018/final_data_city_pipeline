@@ -1,4 +1,4 @@
-# collect_data.py (Final Corrected Version - Data will no longer be deleted)
+# collect_data.py
 import os
 import requests
 from sqlalchemy import create_engine, text
@@ -8,12 +8,15 @@ import time
 OPENWEATHER_API_KEY = os.environ.get("OPENWEATHER_API_KEY")
 SUPABASE_CONNECTION_STRING = os.environ.get("SUPABASE_CONNECTION_STRING")
 
+# Expanded list of locations on the Western Line
 LOCATIONS = {
     "Colaba": {"lat": 18.906, "lon": 72.813},
     "Worli": {"lat": 19.017, "lon": 72.816},
     "Bandra": {"lat": 19.063, "lon": 72.835},
     "Andheri": {"lat": 19.119, "lon": 72.846},
     "Malad": {"lat": 19.189, "lon": 72.846},
+    "Kandivali": {"lat": 19.206, "lon": 72.843},
+    "Borivali": {"lat": 19.232, "lon": 72.868},
 }
 
 def fetch_live_data(area_name, config):
@@ -35,7 +38,7 @@ def fetch_live_data(area_name, config):
 
         return {
             "timestamp": datetime.utcnow(), "area_name": area_name,
-            "aqi": None, # We will calculate this later
+            "aqi": None, # We will calculate this in the dashboard
             "pm25": p_data.get("pm2_5"), "pm10": p_data.get("pm10"),
             "no2": p_data.get("no2"), "o3": p_data.get("o3"),
             "co": p_data.get("co"), "temperature": w_data["temp"],
@@ -46,10 +49,8 @@ def fetch_live_data(area_name, config):
         return None
 
 def store_data(data_points):
-    print("\nConnecting to Supabase to store data...")
     engine = create_engine(SUPABASE_CONNECTION_STRING)
     with engine.connect() as connection:
-        # This line CREATES the table but will NOT delete it if it already exists
         connection.execute(text("""
         CREATE TABLE IF NOT EXISTS city_metrics (
             id SERIAL PRIMARY KEY, timestamp TIMESTAMPTZ, area_name VARCHAR(255),

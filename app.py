@@ -3,7 +3,7 @@ import streamlit as st
 import pandas as pd
 from sqlalchemy import create_engine
 import plotly.graph_objects as go
-from datetime import timedelta # <--- FIX: Missing import
+from datetime import timedelta
 
 # --- Page Configuration ---
 st.set_page_config(page_title="Mumbai Air Quality Dashboard", layout="wide")
@@ -108,7 +108,6 @@ else:
     with st.container():
         st.markdown('<div class="custom-card">', unsafe_allow_html=True)
         st.markdown("<h3>Historical Data (Last 24 Hours)</h3>", unsafe_allow_html=True)
-        # FIX: The NameError happens here
         last_24h_df = df_location[df_location['timestamp'] >= (latest_data['timestamp'] - timedelta(hours=24))].copy()
         
         if not last_24h_df.empty:
