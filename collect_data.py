@@ -1,54 +1,57 @@
-# collect_data.py (with final, verified station IDs)
+# collect_data.py (New, simpler version using ONLY OpenWeatherMap)
 import os
 import requests
 from sqlalchemy import create_engine, text
 from datetime import datetime
 import time
 
-# WAQI_TOKEN = os.environ.get("WAQI_TOKEN") # Temporarily disable reading from secrets
-WAQI_TOKEN = "demo" # Use the public demo key for this one test
+# --- SECRETS ---
+# We only need the OpenWeatherMap key and the database string now.
 OPENWEATHER_API_KEY = os.environ.get("OPENWEATHER_API_KEY")
 SUPABASE_CONNECTION_STRING = os.environ.get("SUPABASE_CONNECTION_STRING")
 
-# This dictionary now has the correct, verified station IDs that are known to work.
+# Locations with their coordinates
 LOCATIONS = {
-    "Colaba": {"waqi_id": "mumbai-colaba", "lat": 18.906, "lon": 72.813},
-    "Worli": {"waqi_id": "worli-mumbai", "lat": 19.017, "lon": 72.816},
-    "Bandra": {"waqi_id": "bandra-kurla-complex-mumbai", "lat": 19.063, "lon": 72.835},
-    "Andheri": {"waqi_id": "andheri-east-mumbai-suburban", "lat": 19.119, "lon": 72.846},
-    "Malad": {"waqi_id": "malad-west-mumbai-suburban", "lat": 19.189, "lon": 72.846},
+    "Colaba": {"lat": 18.906, "lon": 72.813},
+    "Worli": {"lat": 19.017, "lon": 72.816},
+    "Bandra": {"lat": 19.063, "lon": 72.835},
+    "Andheri": {"lat": 19.119, "lon": 72.846},
+    "Malad": {"lat": 19.189, "lon": 72.846},
+    "Kandivali": {"lat": 19.206, "lon": 72.843},
+    "Borivali": {"lat": 19.232, "lon": 72.868},
 }
 
 def fetch_live_data(area_name, config):
-    print(f"\nAttempting to fetch data for {area_name}...")
-    waqi_url = f"https://api.waqi.info/feed/{config['waqi_id']}/?token={WAQI_TOKEN}"
+    print(f"\nAttempting to fetch data for {area_name} from OpenWeatherMap...")
+    
+    # We will make two API calls to OpenWeatherMap: one for pollution, one for weather
+    pollution_url = f"http://api.openweathermap.org/data/2.5/air_pollution?lat={config['lat']}&lon={config['lon']}&appid={OPENWEATHER_API_KEY}"
     weather_url = f"http://api.openweathermap.org/data/2.5/weather?lat={config['lat']}&lon={config['lon']}&appid={OPENWEATHER_API_KEY}&units=metric"
     
     try:
-        # --- Call WAQI API ---
-        print(f"--> Calling WAQI API for {area_name}...")
-        waqi_res = requests.get(waqi_url, timeout=15).json()
-        if waqi_res.get("status") != "ok":
-            print(f"!!! WAQI API Error for {area_name}: {waqi_res.get('data')}")
-            return None
-        print(f"<-- WAQI API call for {area_name} SUCCEEDED.")
-
-        # --- Call OpenWeatherMap API ---
-        print(f"--> Calling OpenWeatherMap API for {area_name}...")
+        pollution_res = requests.get(pollution_url, timeout=15).json()
         weather_res = requests.get(weather_url, timeout=15).json()
-        if weather_res.get("cod") != 200:
-            print(f"!!! OpenWeatherMap API Error for {area_name}: {weather_res.get('message')}")
-            return None
-        print(f"<-- OpenWeatherMap API call for {area_name} SUCCEEDED.")
 
-        iaqi = waqi_res["data"]["iaqi"]
+        # Check if both API calls were successful
+        if "list" not in pollution_res or weather_res.get("cod") != 200:
+            print(f"!!! API Error for {area_name}, skipping.")
+            return None
+            
+        print(f"<-- API calls for {area_name} SUCCEEDED.")
+        
+        p_data = pollution_res["list"][0]
+        w_data = weather_res["main"]
+
         return {
             "timestamp": datetime.utcnow(), "area_name": area_name,
-            "aqi": waqi_res["data"]["aqi"],
-            "pm25": iaqi.get("pm25", {}).get("v"), "pm10": iaqi.get("pm10", {}).get("v"),
-            "no2": iaqi.get("no2", {}).get("v"), "o3": iaqi.get("o3", {}).get("v"),
-            "co": iaqi.get("co", {}).get("v"), "temperature": weather_res["main"]["temp"],
-            "humidity": weather_res["main"]["humidity"],
+            "aqi": p_data["main"]["aqi"], # This is an index from 1-5
+            "pm25": p_data["components"].get("pm2_5"),
+            "pm10": p_data["components"].get("pm10"),
+            "no2": p_data["components"].get("no2"),
+            "o3": p_data["components"].get("o3"),
+            "co": p_data["components"].get("co"),
+            "temperature": w_data["temp"],
+            "humidity": w_data["humidity"],
         }
     except Exception as e:
         print(f"!!! A critical error occurred while fetching data for {area_name}: {e}")
