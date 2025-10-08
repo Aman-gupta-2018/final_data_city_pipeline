@@ -1,0 +1,11 @@
+requests
+psycopg2-binary
+sqlalchemy
+streamlit
+pandas
+plotly-express
+xgboost
+scikit-learn
+fastapi
+uvicorn
+pytz
