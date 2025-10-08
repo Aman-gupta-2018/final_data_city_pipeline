@@ -5,7 +5,8 @@ from sqlalchemy import create_engine, text
 from datetime import datetime
 import time
 
-WAQI_TOKEN = os.environ.get("WAQI_TOKEN")
+# WAQI_TOKEN = os.environ.get("WAQI_TOKEN") # Temporarily disable reading from secrets
+WAQI_TOKEN = "demo" # Use the public demo key for this one test
 OPENWEATHER_API_KEY = os.environ.get("OPENWEATHER_API_KEY")
 SUPABASE_CONNECTION_STRING = os.environ.get("SUPABASE_CONNECTION_STRING")
 
