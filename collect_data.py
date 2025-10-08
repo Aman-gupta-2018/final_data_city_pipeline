@@ -1,4 +1,4 @@
-# collect_data.py (Final, OpenWeatherMap ONLY version)
+# collect_data.py (Final Corrected Version - Data will no longer be deleted)
 import os
 import requests
 from sqlalchemy import create_engine, text
@@ -49,7 +49,7 @@ def store_data(data_points):
     print("\nConnecting to Supabase to store data...")
     engine = create_engine(SUPABASE_CONNECTION_STRING)
     with engine.connect() as connection:
-        connection.execute(text("DROP TABLE IF EXISTS city_metrics;")) # Reset table for new schema
+        # This line CREATES the table but will NOT delete it if it already exists
         connection.execute(text("""
         CREATE TABLE IF NOT EXISTS city_metrics (
             id SERIAL PRIMARY KEY, timestamp TIMESTAMPTZ, area_name VARCHAR(255),

@@ -1,14 +1,14 @@
-# app.py (Final version with self-calculated AQI)
+# app.py (Final, Polished, and Corrected Version)
 import streamlit as st
 import pandas as pd
 from sqlalchemy import create_engine
-import plotly.express as px
 import plotly.graph_objects as go
+from datetime import timedelta # <--- FIX: Missing import
 
 # --- Page Configuration ---
 st.set_page_config(page_title="Mumbai Air Quality Dashboard", layout="wide")
 
-# --- Custom CSS for Professional UI ---
+# --- Custom CSS for a Professional UI ---
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
@@ -25,24 +25,21 @@ st.markdown("""
     .gauge-bar { display: flex; width: 100%; height: 10px; border-radius: 5px; overflow: hidden; margin-top: 15px; }
     .gauge-segment { flex-grow: 1; }
     .metric-box { text-align: center; background-color: #0D1117; border-radius: 8px; padding: 1rem; border: 1px solid #30363D; }
-    .metric-value { font-size: 1.5rem; font-weight: 600; }
-    .metric-label { font-size: 0.8rem; color: #8B949E; text-transform: uppercase; }
+    .metric-value { font-size: 1.7rem; font-weight: 600; color: #C9D1D9;}
+    .metric-label { font-size: 0.9rem; color: #8B949E; text-transform: uppercase; }
 </style>
 """, unsafe_allow_html=True)
 
 # --- Helper Functions ---
 def pm25_to_us_aqi(pm25):
-    if pd.isna(pm25): return None
-    if pm25 < 0: return 0
-    if pm25 > 1000: return 500 # Cap at max
-    
-    if 0.0 <= pm25 <= 12.0: return ((50 - 0) / (12.0 - 0.0)) * (pm25 - 0.0) + 0
-    elif 12.1 <= pm25 <= 35.4: return ((100 - 51) / (35.4 - 12.1)) * (pm25 - 12.1) + 51
-    elif 35.5 <= pm25 <= 55.4: return ((150 - 101) / (55.4 - 35.5)) * (pm25 - 35.5) + 101
-    elif 55.5 <= pm25 <= 150.4: return ((200 - 151) / (150.4 - 55.5)) * (pm25 - 55.5) + 151
-    elif 150.5 <= pm25 <= 250.4: return ((300 - 201) / (250.4 - 150.5)) * (pm25 - 150.5) + 201
-    elif 250.5 <= pm25 <= 350.4: return ((400 - 301) / (350.4 - 250.5)) * (pm25 - 250.5) + 301
-    else: return ((500 - 401) / (500.4 - 350.5)) * (pm25 - 350.5) + 401
+    if pd.isna(pm25) or pm25 < 0: return None
+    if pm25 > 1000: return 500
+    if 0.0 <= pm25 <= 12.0: return round(((50 - 0) / (12.0 - 0.0)) * (pm25 - 0.0) + 0)
+    if 12.1 <= pm25 <= 35.4: return round(((100 - 51) / (35.4 - 12.1)) * (pm25 - 12.1) + 51)
+    if 35.5 <= pm25 <= 55.4: return round(((150 - 101) / (55.4 - 35.5)) * (pm25 - 35.5) + 101)
+    if 55.5 <= pm25 <= 150.4: return round(((200 - 151) / (150.4 - 55.5)) * (pm25 - 55.5) + 151)
+    if 150.5 <= pm25 <= 250.4: return round(((300 - 201) / (250.4 - 150.5)) * (pm25 - 150.5) + 201)
+    return 500
 
 def get_aqi_status(aqi_val):
     if pd.isna(aqi_val): return "#8B949E", "Unknown"
@@ -61,7 +58,6 @@ def get_db_engine():
 def fetch_data():
     df = pd.read_sql("SELECT * FROM city_metrics ORDER BY timestamp DESC LIMIT 2000", get_db_engine(), parse_dates=['timestamp'])
     df['timestamp'] = df['timestamp'].dt.tz_convert('Asia/Kolkata')
-    # Calculate the US AQI from the PM2.5 value
     df['aqi'] = df['pm25'].apply(pm25_to_us_aqi)
     return df
 
@@ -78,47 +74,50 @@ else:
     df_location = df[df['area_name'] == selected_location].sort_values('timestamp', ascending=False)
     latest_data = df_location.iloc[0]
 
-    # --- Main Display Section ---
-    main_cols = st.columns([2, 1])
-    with main_cols[0]:
-        st.markdown('<div class="custom-card aqi-display">', unsafe_allow_html=True)
-        aqi_color, aqi_level = get_aqi_status(latest_data['aqi'])
-        st.markdown(f'<div class="aqi-value" style="color:{aqi_color};">{latest_data["aqi"]:.0f}</div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="aqi-level" style="color:{aqi_color};">{aqi_level}</div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="aqi-pm25">Based on PM2.5: {latest_data["pm25"]:.1f} µg/m³</div>', unsafe_allow_html=True)
-        st.markdown("""<div class="gauge-bar"><div class="gauge-segment" style="background-color: #22c55e;"></div><div class="gauge-segment" style="background-color: #facc15;"></div><div class="gauge-segment" style="background-color: #f97316;"></div><div class="gauge-segment" style="background-color: #ef4444;"></div><div class="gauge-segment" style="background-color: #a855f7;"></div><div class="gauge-segment" style="background-color: #7f1d1d;"></div></div>""", unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
-    with main_cols[1]:
+    with st.container():
         st.markdown('<div class="custom-card">', unsafe_allow_html=True)
-        st.markdown("<h5>Live Weather</h5>", unsafe_allow_html=True)
-        st.metric("Temperature", f"{latest_data['temperature']:.1f}°C")
-        st.metric("Humidity", f"{latest_data['humidity']:.0f}%")
+        main_cols = st.columns([2, 1])
+        with main_cols[0]:
+            aqi_val = latest_data["aqi"]
+            aqi_color, aqi_level = get_aqi_status(aqi_val)
+            st.markdown(f'<div class="aqi-value" style="color:{aqi_color};">{aqi_val:.0f}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="aqi-level" style="color:{aqi_color};">{aqi_level}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="aqi-pm25">Based on PM2.5: {latest_data["pm25"]:.1f} µg/m³</div>', unsafe_allow_html=True)
+            st.markdown("""<div class="gauge-bar"><div class="gauge-segment" style="background-color: #22c55e;"></div><div class="gauge-segment" style="background-color: #facc15;"></div><div class="gauge-segment" style="background-color: #f97316;"></div><div class="gauge-segment" style="background-color: #ef4444;"></div><div class="gauge-segment" style="background-color: #a855f7;"></div><div class="gauge-segment" style="background-color: #7f1d1d;"></div></div>""", unsafe_allow_html=True)
+        
+        with main_cols[1]:
+            st.markdown("<h5>Live Weather</h5>", unsafe_allow_html=True)
+            st.metric("Temperature", f"{latest_data['temperature']:.1f}°C")
+            st.metric("Humidity", f"{latest_data['humidity']:.0f}%")
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # --- Major Pollutants Section ---
-    st.markdown('<div class="custom-card">', unsafe_allow_html=True)
-    st.markdown("<h3>Major Pollutants</h3>", unsafe_allow_html=True)
-    pollutant_cols = st.columns(6)
-    pollutants = {'PM2.5': 'pm25', 'PM10': 'pm10', 'NO₂': 'no2', 'O₃': 'o3', 'CO': 'co'}
-    i = 0
-    for label, key in pollutants.items():
-        value = latest_data.get(key)
-        display_value = f"{value:.1f}" if pd.notna(value) else "N/A"
-        with pollutant_cols[i % 6]:
-            st.markdown(f"""<div class="metric-box"><div class="metric-value">{display_value}</div><div class="metric-label">{label}</div></div>""", unsafe_allow_html=True)
-        i += 1
-    st.markdown('</div>', unsafe_allow_html=True)
+    with st.container():
+        st.markdown('<div class="custom-card">', unsafe_allow_html=True)
+        st.markdown("<h3>Major Pollutants</h3>", unsafe_allow_html=True)
+        pollutant_cols = st.columns(6)
+        pollutants = {'PM2.5': 'pm25', 'PM10': 'pm10', 'NO₂': 'no2', 'O₃': 'o3', 'CO': 'co'}
+        i = 0
+        for label, key in pollutants.items():
+            value = latest_data.get(key)
+            display_value = f"{value:.1f}" if pd.notna(value) else "N/A"
+            with pollutant_cols[i % 6]:
+                st.markdown(f"""<div class="metric-box"><div class="metric-value">{display_value}</div><div class="metric-label">{label}</div></div>""", unsafe_allow_html=True)
+            i += 1
+        st.markdown('</div>', unsafe_allow_html=True)
     
-    # --- Historical Chart Section ---
-    st.markdown('<div class="custom-card">', unsafe_allow_html=True)
-    st.markdown("<h3>Historical Data (Last 24 Hours)</h3>", unsafe_allow_html=True)
-    last_24h_df = df_location[df_location['timestamp'] >= (latest_data['timestamp'] - timedelta(hours=24))].copy()
-    
-    if not last_24h_df.empty:
-        component_to_graph = st.selectbox("Select Historical Metric to Graph", ['aqi', 'pm25', 'pm10', 'temperature', 'humidity'])
-        last_24h_df['color'] = last_24h_df['aqi'].apply(lambda x: get_aqi_status(x)[0])
-        fig = go.Figure()
-        fig.add_trace(go.Bar(x=last_24h_df['timestamp'], y=last_24h_df[component_to_graph], marker_color=last_24h_df['color'] if component_to_graph == 'aqi' else '#4fd1c7'))
-        fig.update_layout(title_text=f'{component_to_graph.upper()} Trend', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font={'color': 'white'})
-        st.plotly_chart(fig, use_container_width=True)
-    st.markdown('</div>', unsafe_allow_html=True)
+    with st.container():
+        st.markdown('<div class="custom-card">', unsafe_allow_html=True)
+        st.markdown("<h3>Historical Data (Last 24 Hours)</h3>", unsafe_allow_html=True)
+        # FIX: The NameError happens here
+        last_24h_df = df_location[df_location['timestamp'] >= (latest_data['timestamp'] - timedelta(hours=24))].copy()
+        
+        if not last_24h_df.empty:
+            component_to_graph = st.selectbox("Select Historical Metric", ['aqi', 'pm25', 'pm10', 'temperature', 'humidity'])
+            last_24h_df['color'] = last_24h_df['aqi'].apply(lambda x: get_aqi_status(x)[0])
+            fig = go.Figure()
+            fig.add_trace(go.Bar(x=last_24h_df['timestamp'], y=last_24h_df[component_to_graph], 
+                                 marker_color=last_24h_df['color'] if 'aqi' in component_to_graph else '#4fd1c7'))
+            fig.update_layout(title_text=f'{component_to_graph.upper()} Trend', paper_bgcolor='rgba(0,0,0,0)', 
+                              plot_bgcolor='rgba(0,0,0,0)', font={'color': 'white'})
+            st.plotly_chart(fig, use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
