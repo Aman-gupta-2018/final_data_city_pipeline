@@ -1,32 +1,32 @@
-# app.py (Final, Polished, and Corrected Version)
+# app.py (Final version with units added)
 import streamlit as st
 import pandas as pd
 from sqlalchemy import create_engine
+import plotly.express as px
 import plotly.graph_objects as go
 from datetime import timedelta
 
 # --- Page Configuration ---
 st.set_page_config(page_title="Mumbai Air Quality Dashboard", layout="wide")
 
-# --- Custom CSS for a Professional UI ---
+# --- Custom CSS ---
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
     body { font-family: 'Inter', sans-serif; }
     .main { background-color: #0D1117; }
-    .st-emotion-cache-z5fcl4 { border-radius: 12px; }
-    .stSelectbox { border-radius: 8px; }
-    h1, h2, h3 { color: #C9D1D9 !important; }
-    .custom-card { background: #161B22; border: 1px solid #30363D; border-radius: 12px; padding: 25px; margin-bottom: 1.5rem; }
-    .aqi-display { text-align: left; }
-    .aqi-value { font-size: 5rem; font-weight: 700; line-height: 1; }
-    .aqi-level { font-size: 1.5rem; font-weight: 600; margin-top: -10px; }
-    .aqi-pm25 { font-size: 1rem; color: #8B949E; }
-    .gauge-bar { display: flex; width: 100%; height: 10px; border-radius: 5px; overflow: hidden; margin-top: 15px; }
-    .gauge-segment { flex-grow: 1; }
-    .metric-box { text-align: center; background-color: #0D1117; border-radius: 8px; padding: 1rem; border: 1px solid #30363D; }
-    .metric-value { font-size: 1.7rem; font-weight: 600; color: #C9D1D9;}
-    .metric-label { font-size: 0.9rem; color: #8B949E; text-transform: uppercase; }
+    .block-container { padding-top: 2rem; }
+    h1 {
+        background: -webkit-linear-gradient(45deg, #4fd1c7, #63b3ed);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+    h3 {
+        color: #C9D1D9 !important;
+        border-bottom: 2px solid #4fd1c7;
+        padding-bottom: 10px;
+        margin-bottom: 1.5rem;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -74,49 +74,64 @@ else:
     df_location = df[df['area_name'] == selected_location].sort_values('timestamp', ascending=False)
     latest_data = df_location.iloc[0]
 
-    with st.container():
-        st.markdown('<div class="custom-card">', unsafe_allow_html=True)
-        main_cols = st.columns([2, 1])
-        with main_cols[0]:
-            aqi_val = latest_data["aqi"]
-            aqi_color, aqi_level = get_aqi_status(aqi_val)
-            st.markdown(f'<div class="aqi-value" style="color:{aqi_color};">{aqi_val:.0f}</div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="aqi-level" style="color:{aqi_color};">{aqi_level}</div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="aqi-pm25">Based on PM2.5: {latest_data["pm25"]:.1f} µg/m³</div>', unsafe_allow_html=True)
-            st.markdown("""<div class="gauge-bar"><div class="gauge-segment" style="background-color: #22c55e;"></div><div class="gauge-segment" style="background-color: #facc15;"></div><div class="gauge-segment" style="background-color: #f97316;"></div><div class="gauge-segment" style="background-color: #ef4444;"></div><div class="gauge-segment" style="background-color: #a855f7;"></div><div class="gauge-segment" style="background-color: #7f1d1d;"></div></div>""", unsafe_allow_html=True)
-        
-        with main_cols[1]:
-            st.markdown("<h5>Live Weather</h5>", unsafe_allow_html=True)
-            st.metric("Temperature", f"{latest_data['temperature']:.1f}°C")
-            st.metric("Humidity", f"{latest_data['humidity']:.0f}%")
-        st.markdown('</div>', unsafe_allow_html=True)
-
-    with st.container():
-        st.markdown('<div class="custom-card">', unsafe_allow_html=True)
-        st.markdown("<h3>Major Pollutants</h3>", unsafe_allow_html=True)
-        pollutant_cols = st.columns(6)
-        pollutants = {'PM2.5': 'pm25', 'PM10': 'pm10', 'NO₂': 'no2', 'O₃': 'o3', 'CO': 'co'}
-        i = 0
-        for label, key in pollutants.items():
-            value = latest_data.get(key)
-            display_value = f"{value:.1f}" if pd.notna(value) else "N/A"
-            with pollutant_cols[i % 6]:
-                st.markdown(f"""<div class="metric-box"><div class="metric-value">{display_value}</div><div class="metric-label">{label}</div></div>""", unsafe_allow_html=True)
-            i += 1
-        st.markdown('</div>', unsafe_allow_html=True)
+    st.header(f"Live Metrics for {selected_location}", divider='rainbow')
     
-    with st.container():
-        st.markdown('<div class="custom-card">', unsafe_allow_html=True)
-        st.markdown("<h3>Historical Data (Last 24 Hours)</h3>", unsafe_allow_html=True)
-        last_24h_df = df_location[df_location['timestamp'] >= (latest_data['timestamp'] - timedelta(hours=24))].copy()
+    main_cols = st.columns(2)
+    with main_cols[0]:
+        aqi_val = latest_data["aqi"]
+        aqi_color, aqi_level = get_aqi_status(aqi_val)
         
-        if not last_24h_df.empty:
-            component_to_graph = st.selectbox("Select Historical Metric", ['aqi', 'pm25', 'pm10', 'temperature', 'humidity'])
-            last_24h_df['color'] = last_24h_df['aqi'].apply(lambda x: get_aqi_status(x)[0])
-            fig = go.Figure()
-            fig.add_trace(go.Bar(x=last_24h_df['timestamp'], y=last_24h_df[component_to_graph], 
-                                 marker_color=last_24h_df['color'] if 'aqi' in component_to_graph else '#4fd1c7'))
-            fig.update_layout(title_text=f'{component_to_graph.upper()} Trend', paper_bgcolor='rgba(0,0,0,0)', 
-                              plot_bgcolor='rgba(0,0,0,0)', font={'color': 'white'})
-            st.plotly_chart(fig, use_container_width=True)
-        st.markdown('</div>', unsafe_allow_html=True)
+        aqi_gauge = go.Figure(go.Indicator(
+            mode = "gauge+number", value = aqi_val,
+            domain = {'x': [0, 1], 'y': [0, 1]},
+            number = {'font': {'size': 80, 'color': aqi_color}},
+            title = {'text': f"<b>{aqi_level}</b>", 'font': {'size': 24}},
+            gauge = {
+                'axis': {'range': [0, 300], 'tickwidth': 1, 'tickcolor': "#8B949E"},
+                'bar': {'color': aqi_color, 'thickness': 0},
+                'bgcolor': "rgba(0,0,0,0)", 'shape': "angular",
+                'steps': [
+                    {'range': [0, 50], 'color': '#22c55e'}, {'range': [51, 100], 'color': '#facc15'},
+                    {'range': [101, 150], 'color': '#f97316'}, {'range': [151, 200], 'color': '#ef4444'},
+                    {'range': [201, 300], 'color': '#a855f7'}],
+                'threshold': {'line': {'color': "white", 'width': 3}, 'thickness': 0.8, 'value': aqi_val}
+            }))
+        aqi_gauge.update_layout(height=250, margin=dict(l=30, r=30, t=60, b=30), paper_bgcolor='rgba(0,0,0,0)')
+        st.plotly_chart(aqi_gauge, use_container_width=True)
+
+    with main_cols[1]:
+        st.markdown("<br><br>", unsafe_allow_html=True)
+        sub_cols = st.columns(2)
+        sub_cols[0].metric("Temperature", f"{latest_data['temperature']:.1f}°C")
+        sub_cols[1].metric("Humidity", f"{latest_data['humidity']:.0f}%")
+        sub_cols[0].metric("PM2.5", f"{latest_data['pm25']:.1f} µg/m³")
+        sub_cols[1].metric("PM10", f"{latest_data['pm10']:.1f} µg/m³" if pd.notna(latest_data['pm10']) else "N/A")
+
+    st.header("Major Pollutants", divider='rainbow')
+    pollutant_cols = st.columns(6)
+    pollutants = {'NO₂': 'no2', 'O₃': 'o3', 'CO': 'co'}
+    i = 0
+    for label, key in pollutants.items():
+        value = latest_data.get(key)
+        with pollutant_cols[i]:
+            # --- FIX: Added the unit 'µg/m³' to the display ---
+            st.metric(label, f"{value:.1f} µg/m³" if pd.notna(value) else "N/A")
+        i += 1
+    
+    st.header("Next Hour Predictions", divider='rainbow')
+    st.info("Train your models by running `python train_models.py` to see predictions here.")
+    
+    st.header("Historical Data (Last 24 Hours)", divider='rainbow')
+    last_24h_df = df_location[df_location['timestamp'] >= (latest_data['timestamp'] - timedelta(hours=24))].copy()
+    
+    if not last_24h_df.empty:
+        component_to_graph = st.selectbox("Select Historical Metric", ['aqi', 'pm25', 'pm10', 'temperature', 'humidity'])
+        
+        fig = px.area(
+            last_24h_df, x='timestamp', y=component_to_graph,
+            title=f'{component_to_graph.upper()} Trend', markers=True
+        )
+        fig.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font={'color': 'white'})
+        fig.update_traces(line=dict(color='#63b3ed'))
+        
+        st.plotly_chart(fig, use_container_width=True)
