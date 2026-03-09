@@ -1,137 +1,93 @@
-# app.py (Final version with units added)
 import streamlit as st
 import pandas as pd
-from sqlalchemy import create_engine
-import plotly.express as px
+import joblib, os
 import plotly.graph_objects as go
+from sqlalchemy import create_engine
 from datetime import timedelta
 
-# --- Page Configuration ---
-st.set_page_config(page_title="Mumbai Air Quality Dashboard", layout="wide")
+# --- AESTHETIC CONFIG ---
+st.set_page_config(page_title="Mumbai Smart City Air Dashboard", layout="wide")
 
-# --- Custom CSS ---
 st.markdown("""
-<style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
-    body { font-family: 'Inter', sans-serif; }
-    .main { background-color: #0D1117; }
-    .block-container { padding-top: 2rem; }
-    h1 {
-        background: -webkit-linear-gradient(45deg, #4fd1c7, #63b3ed);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
+    <style>
+    .main { background-color: #0f172a; }
+    .stApp { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); color: white; }
+    [data-testid="stMetricValue"] { font-size: 2rem !important; color: #3b82f6; }
+    .prediction-card { 
+        background: rgba(255, 255, 255, 0.05); 
+        padding: 25px; 
+        border-radius: 20px; 
+        border: 1px solid rgba(255, 255, 255, 0.1); 
+        backdrop-filter: blur(12px); 
+        margin-bottom: 20px;
+        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
     }
-    h3 {
-        color: #C9D1D9 !important;
-        border-bottom: 2px solid #4fd1c7;
-        padding-bottom: 10px;
-        margin-bottom: 1.5rem;
-    }
-</style>
-""", unsafe_allow_html=True)
+    .status-good { color: #22c55e; font-weight: bold; }
+    .status-bad { color: #ef4444; font-weight: bold; }
+    </style>
+    """, unsafe_allow_html=True)
 
-# --- Helper Functions ---
-def pm25_to_us_aqi(pm25):
-    if pd.isna(pm25) or pm25 < 0: return None
-    if pm25 > 1000: return 500
-    if 0.0 <= pm25 <= 12.0: return round(((50 - 0) / (12.0 - 0.0)) * (pm25 - 0.0) + 0)
-    if 12.1 <= pm25 <= 35.4: return round(((100 - 51) / (35.4 - 12.1)) * (pm25 - 12.1) + 51)
-    if 35.5 <= pm25 <= 55.4: return round(((150 - 101) / (55.4 - 35.5)) * (pm25 - 35.5) + 101)
-    if 55.5 <= pm25 <= 150.4: return round(((200 - 151) / (150.4 - 55.5)) * (pm25 - 55.5) + 151)
-    if 150.5 <= pm25 <= 250.4: return round(((300 - 201) / (250.4 - 150.5)) * (pm25 - 150.5) + 201)
-    return 500
-
-def get_aqi_status(aqi_val):
-    if pd.isna(aqi_val): return "#8B949E", "Unknown"
-    if aqi_val <= 50: return "#22c55e", "Good"
-    if aqi_val <= 100: return "#facc15", "Moderate"
-    if aqi_val <= 150: return "#f97316", "Unhealthy for Sensitive"
-    if aqi_val <= 200: return "#ef4444", "Unhealthy"
-    if aqi_val <= 300: return "#a855f7", "Very Unhealthy"
-    return "#7f1d1d", "Hazardous"
-
+# --- DATABASE & LOGIC ---
 @st.cache_resource
-def get_db_engine():
-    return create_engine(st.secrets["SUPABASE_CONNECTION_STRING"])
+def get_db(): return create_engine(st.secrets["SUPABASE_CONNECTION_STRING"])
 
-@st.cache_data(ttl=600)
-def fetch_data():
-    df = pd.read_sql("SELECT * FROM city_metrics ORDER BY timestamp DESC LIMIT 2000", get_db_engine(), parse_dates=['timestamp'])
-    df['timestamp'] = df['timestamp'].dt.tz_convert('Asia/Kolkata')
-    df['aqi'] = df['pm25'].apply(pm25_to_us_aqi)
-    return df
+def get_recursive_predictions(latest_row, area, hours=3):
+    results = []
+    current_data = latest_row.to_dict()
+    for h in range(1, hours + 1):
+        pred_time = current_data['timestamp'] + timedelta(hours=1)
+        preds = {'hour_offset': h, 'timestamp': pred_time}
+        for col in ['pm25', 'temperature', 'humidity']:
+            path = f'models/{area}_{col}_model.pkl'
+            if not os.path.exists(path): return None
+            m_data = joblib.load(path)
+            feat = pd.DataFrame([{
+                'hour': pred_time.hour, 'day_of_week': pred_time.dayofweek,
+                f'{col}_lag1': current_data[col], f'{col}_roll_avg3': current_data[col]
+            }])[m_data['features']]
+            preds[col] = float(m_data['model'].predict(feat)[0])
+        results.append(preds)
+        current_data.update(preds)
+    return results
 
-# --- Main Dashboard UI ---
-df = fetch_data()
-st.title("🏙️ Mumbai Air Quality Dashboard")
+def get_human_advice(pm25):
+    if pm25 <= 12: return "✨ The air is crystal clear! It's a <span class='status-good'>great day</span> for outdoor exercise."
+    if pm25 <= 35: return "🍃 The air is <span class='status-good'>fairly good</span>, but sensitive groups might feel a slight haze."
+    if pm25 <= 55: return "⚠️ It's getting <span class='status-bad'>dusty</span>. If you have asthma, you should consider staying indoors."
+    return "🚫 The air quality is <span class='status-bad'>bad</span>. Please wear a mask; it is not healthy to be outside."
 
-if df.empty:
-    st.warning("Data is currently being collected. Please ensure your data pipeline has run.")
-else:
-    locations = sorted(df['area_name'].unique())
-    selected_location = st.selectbox("Select a Location", locations)
+# --- UI EXECUTION ---
+st.title("🏙️ Mumbai Smart City: Air Intelligence")
+df = pd.read_sql("SELECT * FROM city_metrics ORDER BY timestamp DESC LIMIT 2000", get_db(), parse_dates=['timestamp'])
+df['timestamp'] = df['timestamp'].dt.tz_convert('Asia/Kolkata')
 
-    df_location = df[df['area_name'] == selected_location].sort_values('timestamp', ascending=False)
-    latest_data = df_location.iloc[0]
+if not df.empty:
+    locs = sorted(df['area_name'].unique())
+    selected_loc = st.sidebar.selectbox("Select Neighborhood", locs)
+    latest = df[df['area_name'] == selected_loc].iloc[0]
 
-    st.header(f"Live Metrics for {selected_location}", divider='rainbow')
-    
-    main_cols = st.columns(2)
-    with main_cols[0]:
-        aqi_val = latest_data["aqi"]
-        aqi_color, aqi_level = get_aqi_status(aqi_val)
-        
-        aqi_gauge = go.Figure(go.Indicator(
-            mode = "gauge+number", value = aqi_val,
-            domain = {'x': [0, 1], 'y': [0, 1]},
-            number = {'font': {'size': 80, 'color': aqi_color}},
-            title = {'text': f"<b>{aqi_level}</b>", 'font': {'size': 24}},
-            gauge = {
-                'axis': {'range': [0, 300], 'tickwidth': 1, 'tickcolor': "#8B949E"},
-                'bar': {'color': aqi_color, 'thickness': 0},
-                'bgcolor': "rgba(0,0,0,0)", 'shape': "angular",
-                'steps': [
-                    {'range': [0, 50], 'color': '#22c55e'}, {'range': [51, 100], 'color': '#facc15'},
-                    {'range': [101, 150], 'color': '#f97316'}, {'range': [151, 200], 'color': '#ef4444'},
-                    {'range': [201, 300], 'color': '#a855f7'}],
-                'threshold': {'line': {'color': "white", 'width': 3}, 'thickness': 0.8, 'value': aqi_val}
-            }))
-        aqi_gauge.update_layout(height=250, margin=dict(l=30, r=30, t=60, b=30), paper_bgcolor='rgba(0,0,0,0)')
-        st.plotly_chart(aqi_gauge, use_container_width=True)
+    # Current Stats
+    st.subheader(f"Current Environment: {selected_loc}")
+    c1, c2, c3 = st.columns(3)
+    c1.metric("PM2.5", f"{latest['pm25']:.1f} µg/m³")
+    c2.metric("Temp", f"{latest['temperature']:.1f}°C")
+    c3.metric("Humidity", f"{latest['humidity']:.0f}%")
 
-    with main_cols[1]:
-        st.markdown("<br><br>", unsafe_allow_html=True)
-        sub_cols = st.columns(2)
-        sub_cols[0].metric("Temperature", f"{latest_data['temperature']:.1f}°C")
-        sub_cols[1].metric("Humidity", f"{latest_data['humidity']:.0f}%")
-        sub_cols[0].metric("PM2.5", f"{latest_data['pm25']:.1f} µg/m³")
-        sub_cols[1].metric("PM10", f"{latest_data['pm10']:.1f} µg/m³" if pd.notna(latest_data['pm10']) else "N/A")
+    # Predictions
+    st.divider()
+    st.header("🕒 3-Hour Smart Forecast")
+    forecasts = get_recursive_predictions(latest, selected_loc)
 
-    st.header("Major Pollutants", divider='rainbow')
-    pollutant_cols = st.columns(6)
-    pollutants = {'NO₂': 'no2', 'O₃': 'o3', 'CO': 'co'}
-    i = 0
-    for label, key in pollutants.items():
-        value = latest_data.get(key)
-        with pollutant_cols[i]:
-            # --- FIX: Added the unit 'µg/m³' to the display ---
-            st.metric(label, f"{value:.1f} µg/m³" if pd.notna(value) else "N/A")
-        i += 1
-    
-    st.header("Next Hour Predictions", divider='rainbow')
-    st.info("Train your models by running `python train_models.py` to see predictions here.")
-    
-    st.header("Historical Data (Last 24 Hours)", divider='rainbow')
-    last_24h_df = df_location[df_location['timestamp'] >= (latest_data['timestamp'] - timedelta(hours=24))].copy()
-    
-    if not last_24h_df.empty:
-        component_to_graph = st.selectbox("Select Historical Metric", ['aqi', 'pm25', 'pm10', 'temperature', 'humidity'])
-        
-        fig = px.area(
-            last_24h_df, x='timestamp', y=component_to_graph,
-            title=f'{component_to_graph.upper()} Trend', markers=True
-        )
-        fig.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font={'color': 'white'})
-        fig.update_traces(line=dict(color='#63b3ed'))
-        
-        st.plotly_chart(fig, use_container_width=True)
+    if forecasts:
+        for f in forecasts:
+            st.markdown(f"""<div class="prediction-card">
+                <h3 style="margin-top:0;">{f['hour_offset']} Hour Forecast ({f['timestamp'].strftime('%I:%M %p')})</h3>
+                <p style="font-size:1.2rem; line-height:1.6;">{get_human_advice(f['pm25'])}</p>
+                <div style="display:flex; gap:40px; margin-top:15px;">
+                    <div><b>PM2.5:</b> {f['pm25']:.1f}</div>
+                    <div><b>Temp:</b> {f['temperature']:.1f}°C</div>
+                    <div><b>Humidity:</b> {f['humidity']:.0f}%</div>
+                </div>
+            </div>""", unsafe_allow_html=True)
+    else:
+        st.info("Training models for this new location... please run train_models.py first.")
