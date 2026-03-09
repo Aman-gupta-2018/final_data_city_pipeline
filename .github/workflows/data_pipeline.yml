@@ -3,7 +3,7 @@ name: Collect Smart City Data
 on:
   schedule:
     # runs code every half hour
-    - cron: '*/30 * * * *'
+    - cron: '*/15 * * * *'
   workflow_dispatch: # to run it manually
 
 jobs:
