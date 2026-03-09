@@ -5,7 +5,6 @@ from datetime import datetime
 OPENWEATHER_API_KEY = os.environ.get("OPENWEATHER_API_KEY")
 SUPABASE_CONNECTION_STRING = os.environ.get("SUPABASE_CONNECTION_STRING")
 
-# Updated locations with Vasai, Bhiwandi, and Kaman Road
 LOCATIONS = {
     "Colaba": {"lat": 18.906, "lon": 72.813},
     "Worli": {"lat": 19.017, "lon": 72.816},
@@ -13,10 +12,10 @@ LOCATIONS = {
     "Andheri": {"lat": 19.119, "lon": 72.846},
     "Malad": {"lat": 19.189, "lon": 72.846},
     "Borivali": {"lat": 19.232, "lon": 72.868},
+    "Kandivali": {"lat": 19.206, "lon": 72.843},
     "Kaman Road": {"lat": 19.336, "lon": 72.919}, 
     "Vasai": {"lat": 19.391, "lon": 72.839},
-    "Bhiwandi": {"lat": 19.296, "lon": 73.063},
-    "Kandivali": {"lat": 19.206, "lon": 72.843}
+    "Bhiwandi": {"lat": 19.296, "lon": 73.063}
 }
 
 def fetch_live_data(area_name, config):
@@ -33,15 +32,13 @@ def fetch_live_data(area_name, config):
             "no2": p_data.get("no2"), "o3": p_data.get("o3"), "co": p_data.get("co"),
             "temperature": w_data["temp"], "humidity": w_data["humidity"]
         }
-    except: return None
+    except Exception as e:
+        print(f"Error fetching {area_name}: {e}")
+        return None
 
 def store_data(data_points):
     engine = create_engine(SUPABASE_CONNECTION_STRING)
     with engine.connect() as conn:
-        conn.execute(text("""CREATE TABLE IF NOT EXISTS city_metrics (
-            id SERIAL PRIMARY KEY, timestamp TIMESTAMPTZ, area_name VARCHAR(255),
-            pm25 FLOAT, pm10 FLOAT, no2 FLOAT, o3 FLOAT, co FLOAT, temperature FLOAT, humidity FLOAT
-        );"""))
         for dp in data_points:
             if dp:
                 conn.execute(text("""INSERT INTO city_metrics (timestamp, area_name, pm25, pm10, no2, o3, co, temperature, humidity) 

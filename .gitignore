@@ -4,3 +4,4 @@
 # Ignore Python cache files
 __pycache__/
 
+git reset --soft HEAD~1
