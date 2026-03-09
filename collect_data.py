@@ -38,13 +38,28 @@ def fetch_live_data(area_name, config):
 
 def store_data(data_points):
     engine = create_engine(SUPABASE_CONNECTION_STRING)
+    # Filter out None results from failed API calls
+    valid_points = [dp for dp in data_points if dp is not None]
+    
+    insert_sql = text("""
+        INSERT INTO city_metrics 
+            (timestamp, area_name, pm25, pm10, no2, o3, co, temperature, humidity) 
+        VALUES 
+            (:ts, :area, :pm25, :pm10, :no2, :o3, :co, :temp, :hum)
+        ON CONFLICT (timestamp, area_name) DO NOTHING
+    """)
+
     with engine.connect() as conn:
-        for dp in data_points:
-            if dp:
-                conn.execute(text("""INSERT INTO city_metrics (timestamp, area_name, pm25, pm10, no2, o3, co, temperature, humidity) 
-                VALUES (:ts, :area, :pm25, :pm10, :no2, :o3, :co, :temp, :hum)"""),
-                {"ts": dp["timestamp"], "area": dp["area_name"], "pm25": dp["pm25"], "pm10": dp["pm10"], 
-                 "no2": dp["no2"], "o3": dp["o3"], "co": dp["co"], "temp": dp["temperature"], "hum": dp["humidity"]})
+        for dp in valid_points:
+            try:
+                conn.execute(insert_sql, {
+                    "ts": dp["timestamp"], "area": dp["area_name"], 
+                    "pm25": dp["pm25"], "pm10": dp["pm10"], 
+                    "no2": dp["no2"], "o3": dp["o3"], "co": dp["co"], 
+                    "temp": dp["temperature"], "hum": dp["humidity"]
+                })
+            except Exception as e:
+                print(f"Database error for {dp['area_name']}: {e}")
         conn.commit()
 
 if __name__ == "__main__":
