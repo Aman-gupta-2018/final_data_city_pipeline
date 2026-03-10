@@ -62,7 +62,9 @@ def validate(value, key: str):
     except (ValueError, TypeError):
         return None
 
-def fetch_dual_api_data(area_name: str, config: dict) -> dict | None:
+from typing import Optional
+
+def fetch_dual_api_data(area_name: str, config: dict) -> Optional[dict]:
     """Fetches pollution from WAQI and weather from OpenWeatherMap."""
     waqi_url = f"https://api.waqi.info/feed/geo:{config['lat']};{config['lon']}/?token={WAQI_TOKEN}"
     owm_url  = f"http://api.openweathermap.org/data/2.5/weather?lat={config['lat']}&lon={config['lon']}&appid={OPENWEATHER_API_KEY}&units=metric"
