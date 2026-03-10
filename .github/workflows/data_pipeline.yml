@@ -20,3 +20,11 @@ jobs:
           OPENWEATHER_API_KEY: ${{ secrets.OPENWEATHER_API_KEY }}
           SUPABASE_CONNECTION_STRING: ${{ secrets.SUPABASE_CONNECTION_STRING }}
         run: python collect_data.py
+      - name: Commit and push heartbeat
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          echo "Last successful collection: $(date)" > heartbeat.txt
+          git add heartbeat.txt
+          git commit -m "Pipeline Heartbeat: $(date)" || echo "No changes to commit"
+          git push
