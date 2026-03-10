@@ -27,9 +27,9 @@ LOCATIONS = {
     "Malad":      {"lat": 19.189, "lon": 72.846},
     "Borivali":   {"lat": 19.232, "lon": 72.868},
     "Kandivali":  {"lat": 19.206, "lon": 72.843},
-    "Kaman Road": {"lat": 19.336, "lon": 72.919},
-    "Vasai":      {"lat": 19.391, "lon": 72.839},
-    "Bhiwandi":   {"lat": 19.296, "lon": 73.063},
+    "Kurla":      {"lat": 19.073, "lon": 72.880},  
+    "Sion":       {"lat": 19.039, "lon": 72.861},  
+    "Powai":      {"lat": 19.117, "lon": 72.906},  
 }
 
 API_RETRIES   = 3
