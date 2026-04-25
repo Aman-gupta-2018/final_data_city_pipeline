@@ -24,5 +24,5 @@ jobs:
         env:
           OPENWEATHER_API_KEY: ${{ secrets.OPENWEATHER_API_KEY }}
           WAQI_TOKEN: ${{ secrets.WAQI_TOKEN }}
-          SUPABASE_CONN_STR: ${{ secrets.SUPABASE_CONN_STR }}
+          SUPABASE_CONNECTION_STRING: ${{ secrets.SUPABASE_CONN_STR }}
         run: python collect_data.py
