@@ -209,7 +209,7 @@ def get_predictions(df_area, area, hours=3):
     
     #Resample the actual history to a 15-minute grid to match training
     df_hist = df_area.copy().set_index('timestamp').sort_index()
-    df_hist = df_hist.resample('15T').mean(numeric_only=True).interpolate(method='linear', limit=4)
+    df_hist = df_hist.resample('15min').mean(numeric_only=True).interpolate(method='linear', limit=4)
 
     #Need at least 97 records to build features
     if len(df_hist) < 97:
@@ -287,7 +287,7 @@ def theme(fig, height=300, margin=None):
 
 def sparkline(df_in, col, color, height=240, title=''):
     df_h = (df_in.set_index('timestamp')[col]
-            .resample('15T').mean().dropna().reset_index())
+            .resample('15min').mean().dropna().reset_index())
     df_h.columns = ['timestamp', col]
     fig = go.Figure(go.Scatter(
         x=df_h['timestamp'], y=df_h[col], mode='lines',
@@ -522,7 +522,7 @@ with tab_trends:
     else:
         st.markdown(f'<div style="{_SEC_HDR}">AQI Timeline — {selected_area}</div>',
                     unsafe_allow_html=True)
-        df_th = df_t.set_index('timestamp').resample('15T').mean(numeric_only=True).reset_index()
+        df_th = df_t.set_index('timestamp').resample('15min').mean(numeric_only=True).reset_index()
         df_th['aqi'] = df_th['pm25'].apply(pm25_to_aqi)
 
         fig_aqi = go.Figure()
@@ -626,7 +626,7 @@ with tab_compare:
         fig_cmp = go.Figure()
         for idx, area in enumerate(cmp_areas):
             da = df_cmp[df_cmp['area_name'] == area].sort_values('timestamp')
-            dh = da.set_index('timestamp').resample('15T').mean(numeric_only=True)
+            dh = da.set_index('timestamp').resample('15min').mean(numeric_only=True)
             if cmp_metric == 'aqi': dh['aqi'] = dh['pm25'].apply(pm25_to_aqi)
             dh = dh.reset_index()
             if dh.empty or cmp_metric not in dh.columns: continue
