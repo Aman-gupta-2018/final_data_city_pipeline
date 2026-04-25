@@ -1,25 +1,28 @@
-name: Collect Smart City Data
+name: 15-Min Data Ingestion
 
 on:
-  schedule:
-    - cron: '*/15 * * * *'
-  workflow_dispatch:
+  repository_dispatch:
+    types: [trigger-ingestion]
+  workflow_dispatch: # Allows you to click a button to test it manually
 
 jobs:
   collect-data:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.9'
-          cache: 'pip' # Speeds up the run by caching dependencies
-          
-      - run: pip install -r requirements.txt
-      
-      - name: Run data collection script
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: pip install pandas requests sqlalchemy psycopg2-binary
+
+      - name: Run Ingestion Script
         env:
-          WAQI_TOKEN: ${{ secrets.WAQI_TOKEN }}
           OPENWEATHER_API_KEY: ${{ secrets.OPENWEATHER_API_KEY }}
-          SUPABASE_CONNECTION_STRING: ${{ secrets.SUPABASE_CONNECTION_STRING }}
+          WAQI_TOKEN: ${{ secrets.WAQI_TOKEN }}
+          SUPABASE_CONN_STR: ${{ secrets.SUPABASE_CONN_STR }}
         run: python collect_data.py
