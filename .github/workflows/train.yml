@@ -1,0 +1,36 @@
+name: Weekly Model Training
+
+on:
+  schedule:
+    - cron: '0 2 * * 0' # Runs at 2 AM UTC every Sunday
+  workflow_dispatch:
+
+jobs:
+  train-models:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Required so the bot can push the files back to the repo
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: pip install pandas numpy xgboost scikit-learn sqlalchemy psycopg2-binary joblib
+
+      - name: Run Training Script
+        env:
+          SUPABASE_CONNECTION_STRING: ${{ secrets.SUPABASE_CONN_STR }}
+        run: python train_models.py
+
+      - name: Commit and Push .pkl files
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add models/*.pkl
+          git commit -m "Auto-update: Retrained XGBoost models" || echo "No changes to commit"
+          git push
